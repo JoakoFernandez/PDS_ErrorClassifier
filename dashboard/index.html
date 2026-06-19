@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PDS Error Classifier — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.15/vue.global.prod.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #16161f;
+    --border: #222230;
+    --accent: #6c63ff;
+    --accent2: #00e5c3;
+    --accent3: #ff6b6b;
+    --amber: #ffb347;
+    --text: #e8e8f0;
+    --text-muted: #7070a0;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --radius: 10px;
+    --transition: 0.18s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  .shell { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-size: 18px;
+  }
+  .logo-text { font-size: 15px; font-weight: 700; letter-spacing: 0.04em; color: var(--text); }
+  .logo-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); font-family: var(--mono); letter-spacing: 0.06em; }
+  .status-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+  /* ── Section title ──────────────────────────────────────── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Input Panel ─────────────────────────────────────────── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .form-row.full { grid-template-columns: 1fr; }
+
+  .field label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 7px;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+  }
+  select option { background: var(--surface2); }
+  textarea { resize: vertical; min-height: 68px; }
+  input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+  /* ── Quick codes ─────────────────────────────────────────── */
+  .quick-codes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .quick-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .quick-chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(108,99,255,0.08); }
+
+  /* ── Submit button ───────────────────────────────────────── */
+  .btn-classify {
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: opacity var(--transition), transform var(--transition);
+  }
+  .btn-classify:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+  .btn-classify:disabled { opacity: 0.45; cursor: not-allowed; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result card ─────────────────────────────────────────── */
+  .result-card {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 24px;
+    animation: slideIn 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+  .result-header {
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .result-header.sev-low    { background: rgba(0,229,195,0.06); }
+  .result-header.sev-medium { background: rgba(255,179,71,0.07); }
+  .result-header.sev-high   { background: rgba(108,99,255,0.08); }
+  .result-header.sev-critical { background: rgba(255,107,107,0.1); }
+
+  .result-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .result-message { font-size: 13px; color: var(--text-muted); line-height: 1.6; max-width: 600px; }
+
+  .severity-pill {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .sev-low    .severity-pill { background: rgba(0,229,195,0.15); color: var(--accent2); }
+  .sev-medium .severity-pill { background: rgba(255,179,71,0.15); color: var(--amber); }
+  .sev-high   .severity-pill { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .sev-critical .severity-pill { background: rgba(255,107,107,0.15); color: var(--accent3); }
+
+  .result-body { background: var(--surface); padding: 20px 24px; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .meta-item {}
+  .meta-key { font-family: var(--mono); font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .meta-val { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .meta-val.source-static   { color: var(--accent2); }
+  .meta-val.source-cache    { color: var(--amber); }
+  .meta-val.source-ai       { color: var(--accent); }
+  .meta-val.source-fallback { color: var(--text-muted); }
+
+  .actions-title { font-family: var(--mono); font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+  .action-list { display: flex; flex-direction: column; gap: 10px; }
+  .action-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    transition: border-color var(--transition);
+  }
+  .action-item:hover { border-color: rgba(108,99,255,0.4); }
+  .action-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(108,99,255,0.15);
+    color: var(--accent);
+    font-size: 11px; font-weight: 700; font-family: var(--mono);
+    display: grid; place-items: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .action-label { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .action-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .action-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 6px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .escalation-banner {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 16px;
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.25);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .escalation-icon { font-size: 18px; }
+  .escalation-text { font-size: 13px; line-height: 1.5; }
+  .escalation-text strong { color: var(--accent3); }
+
+  .ref-code {
+    margin-top: 16px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .ref-label { font-family: var(--mono); font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .ref-value { font-family: var(--mono); font-size: 13px; color: var(--accent2); font-weight: 500; }
+
+  /* ── History ─────────────────────────────────────────────── */
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition);
+  }
+  .history-item:hover { border-color: rgba(108,99,255,0.4); background: var(--surface2); }
+  .history-code { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); }
+  .history-title { font-size: 12px; color: var(--text-muted); }
+  .history-meta { display: flex; align-items: center; gap: 8px; }
+  .history-src { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+  .dot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
+
+  .empty-state { text-align: center; padding: 36px; color: var(--text-muted); font-size: 13px; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; opacity: 0.4; }
+
+  /* ── Error state ─────────────────────────────────────────── */
+  .error-banner {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.25);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--accent3);
+    margin-bottom: 20px;
+    font-family: var(--mono);
+  }
+
+  /* ── Confidence bar ──────────────────────────────────────── */
+  .conf-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .conf-bar { flex: 1; height: 4px; background: var(--border); border-radius: 999px; overflow: hidden; }
+  .conf-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.5s ease; }
+  .conf-pct { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="shell">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <div class="logo-text">PDS Error Classifier</div>
+          <div class="logo-sub">payment error intelligence</div>
+        </div>
+      </div>
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        microservice online
+      </div>
+    </header>
+
+    <!-- Error banner -->
+    <div v-if="apiError" class="error-banner">⚠ {{ apiError }}</div>
+
+    <!-- Input Panel -->
+    <div class="panel">
+      <div class="section-label">Classify Error</div>
+
+      <div class="form-row">
+        <div class="field">
+          <label>Error Code *</label>
+          <input v-model="form.errorCode" placeholder="e.g. 504, CARD_DECLINED" @keyup.enter="classify" />
+        </div>
+        <div class="field">
+          <label>Raw System Message</label>
+          <input v-model="form.rawMessage" placeholder="e.g. invalid param, upstream timeout" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label>Payment Method</label>
+          <select v-model="form.context.paymentMethod">
+            <option value="">Select…</option>
+            <option>credit_card</option>
+            <option>debit_card</option>
+            <option>bank_transfer</option>
+            <option>digital_wallet</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Transaction Type</label>
+          <select v-model="form.context.transactionType">
+            <option value="">Select…</option>
+            <option>checkout</option>
+            <option>subscription_renewal</option>
+            <option>refund</option>
+            <option>pre_authorization</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Quick codes -->
+      <div class="section-label" style="margin-top:18px; margin-bottom:6px;">Quick Test Codes</div>
+      <div class="quick-codes">
+        <span v-for="code in quickCodes" :key="code" class="quick-chip" @click="useQuickCode(code)">{{ code }}</span>
+      </div>
+
+      <button class="btn-classify" :disabled="!form.errorCode.trim() || loading" @click="classify">
+        <div v-if="loading" class="spinner"></div>
+        <span v-if="!loading">⚡ Classify Error</span>
+        <span v-else>Classifying…</span>
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div v-if="result" :class="['result-card', 'sev-' + result.severity]">
+      <div :class="['result-header', 'sev-' + result.severity]">
+        <div>
+          <div class="result-title">{{ result.userTitle }}</div>
+          <div class="result-message">{{ result.userMessage }}</div>
+        </div>
+        <div class="severity-pill">{{ result.severity }}</div>
+      </div>
+
+      <div class="result-body">
+        <!-- Meta grid -->
+        <div class="meta-grid">
+          <div class="meta-item">
+            <div class="meta-key">Original Code</div>
+            <div class="meta-val">{{ result.originalCode }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Category</div>
+            <div class="meta-val">{{ result.category }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Source</div>
+            <div :class="['meta-val', 'source-' + result.source.split('_')[0]]">{{ result.source }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Confidence</div>
+            <div class="conf-bar-wrap">
+              <div class="conf-bar"><div class="conf-fill" :style="{width: (result.confidence * 100) + '%'}"></div></div>
+              <div class="conf-pct">{{ Math.round(result.confidence * 100) }}%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Suggested Actions -->
+        <div class="actions-title">Suggested Actions</div>
+        <div class="action-list">
+          <div v-for="(action, i) in result.suggestedActions" :key="i" class="action-item">
+            <div class="action-num">{{ i + 1 }}</div>
+            <div>
+              <div class="action-label">{{ action.label }}</div>
+              <div class="action-desc">{{ action.description }}</div>
+              <a v-if="action.actionUrl" :href="action.actionUrl" class="action-link">
+                Go to {{ action.label }} →
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Escalation banner -->
+        <div v-if="result.shouldEscalateToSupport" class="escalation-banner">
+          <div class="escalation-icon">🚨</div>
+          <div class="escalation-text">
+            <strong>Support escalation recommended.</strong> This error requires human review.
+            Provide reference <strong>{{ result.supportReferenceCode }}</strong> when contacting support.
+          </div>
+        </div>
+
+        <!-- Reference code -->
+        <div class="ref-code">
+          <div>
+            <div class="ref-label">Support Reference</div>
+            <div class="ref-value">{{ result.supportReferenceCode }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div>
+      <div class="section-label">Recent Classifications</div>
+      <div v-if="history.length === 0" class="empty-state">
+        <div class="icon">🔍</div>
+        No classifications yet. Try a code above.
+      </div>
+      <div v-else class="history-list">
+        <div v-for="(item, i) in history" :key="i" class="history-item" @click="restoreFromHistory(item)">
+          <div>
+            <div class="history-code">{{ item.originalCode }}</div>
+            <div class="history-title">{{ item.userTitle }}</div>
+          </div>
+          <div class="history-meta">
+            <div :class="['severity-pill', 'sev-' + item.severity]">{{ item.severity }}</div>
+            <div class="dot-sep"></div>
+            <div class="history-src">{{ item.source }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue;
+
+createApp({
+  setup() {
+    const API_BASE = 'http://localhost:3000/api/v1';
+
+    const form = reactive({
+      errorCode: '',
+      rawMessage: '',
+      context: { paymentMethod: '', transactionType: '' }
+    });
+
+    const result = ref(null);
+    const loading = ref(false);
+    const apiError = ref('');
+    const history = ref([]);
+
+    const quickCodes = ['504', 'CARD_DECLINED', 'INSUFFICIENT_FUNDS', 'INVALID_PARAM',
+                        'FRAUD_SUSPECTED', '401', 'NETWORK_ERROR', 'CARD_EXPIRED'];
+
+    function useQuickCode(code) {
+      form.errorCode = code;
+      form.rawMessage = '';
+    }
+
+    async function classify() {
+      if (!form.errorCode.trim() || loading.value) return;
+      loading.value = true;
+      apiError.value = '';
+      result.value = null;
+
+      const body = {
+        errorCode: form.errorCode.trim(),
+        ...(form.rawMessage && { rawMessage: form.rawMessage }),
+        ...(form.context.paymentMethod || form.context.transactionType
+          ? { context: {
+              ...(form.context.paymentMethod && { paymentMethod: form.context.paymentMethod }),
+              ...(form.context.transactionType && { transactionType: form.context.transactionType }),
+            }}
+          : {}
+        ),
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/classify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.success) {
+          apiError.value = json.error?.message || `HTTP ${res.status} — check that the microservice is running on port 3000.`;
+          return;
+        }
+
+        result.value = json.data;
+        // Prepend to history, keep last 10
+        history.value = [json.data, ...history.value.filter(h => h.originalCode !== json.data.originalCode)].slice(0, 10);
+
+      } catch (err) {
+        apiError.value = 'Could not reach the classifier API. Make sure the Node.js service is running (npm run dev) and accessible at ' + API_BASE + '.';
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    function restoreFromHistory(item) {
+      result.value = item;
+      form.errorCode = item.originalCode;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    return { form, result, loading, apiError, history, quickCodes, classify, useQuickCode, restoreFromHistory };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
