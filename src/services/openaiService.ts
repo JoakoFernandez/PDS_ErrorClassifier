@@ -29,7 +29,17 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import type { AiClassificationResponse, ClassifyRequest } from '../types';
 
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
+let openai: OpenAI | null = null;
+
+function getClient(): OpenAI | null {
+  if (!openai && config.openai.apiKey) {
+    openai = new OpenAI({
+      apiKey: config.openai.apiKey,
+      baseURL: config.openai.baseURL || undefined,
+    });
+  }
+  return openai;
+}
 
 const SYSTEM_PROMPT = `You are a payment error classification engine for a financial services platform.
 
@@ -67,6 +77,12 @@ export async function classifyWithAI(
   request: ClassifyRequest,
   requestId: string
 ): Promise<AiClassificationResponse | null> {
+  const client = getClient();
+  if (!client) {
+    logger.warn('OpenAI client not initialized — no API key configured', { requestId });
+    return null;
+  }
+
   const contextLines: string[] = [];
 
   if (request.rawMessage) {
@@ -97,7 +113,7 @@ export async function classifyWithAI(
       model: config.openai.model,
     });
 
-    const completion = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: config.openai.model,
       max_tokens: config.openai.maxTokens,
       temperature: config.openai.temperature,

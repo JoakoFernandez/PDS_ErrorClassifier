@@ -81,6 +81,14 @@
     color: var(--text-muted);
   }
   .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 2s infinite; }
+  .nav-links { display: flex; gap: 10px; align-items: center; }
+  .nav-link {
+    font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-decoration: none;
+    padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+    transition: all var(--transition);
+  }
+  .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-link.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
 
   /* ── Section title ──────────────────────────────────────── */
@@ -335,9 +343,15 @@
           <div class="logo-sub">payment error intelligence</div>
         </div>
       </div>
-      <div class="status-badge">
-        <div class="status-dot"></div>
-        microservice online
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div class="nav-links">
+          <a href="index.html" class="nav-link active">Dashboard</a>
+          <a href="simulator.html" class="nav-link">Simulator</a>
+        </div>
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          microservice online
+        </div>
       </div>
     </header>
 

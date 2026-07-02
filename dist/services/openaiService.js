@@ -32,7 +32,13 @@ exports.classifyWithAI = classifyWithAI;
 const openai_1 = __importDefault(require("openai"));
 const config_1 = require("../config");
 const logger_1 = require("../utils/logger");
-const openai = new openai_1.default({ apiKey: config_1.config.openai.apiKey });
+let openai = null;
+function getClient() {
+    if (!openai && config_1.config.openai.apiKey) {
+        openai = new openai_1.default({ apiKey: config_1.config.openai.apiKey });
+    }
+    return openai;
+}
 const SYSTEM_PROMPT = `You are a payment error classification engine for a financial services platform.
 
 Your job is to take a cryptic technical payment error and produce a user-friendly classification.
@@ -65,6 +71,11 @@ Rules:
  * Returns null if the API call fails or confidence is below threshold.
  */
 async function classifyWithAI(request, requestId) {
+    const client = getClient();
+    if (!client) {
+        logger_1.logger.warn('OpenAI client not initialized — no API key configured', { requestId });
+        return null;
+    }
     const contextLines = [];
     if (request.rawMessage) {
         contextLines.push(`Raw error message: "${request.rawMessage}"`);
@@ -91,7 +102,7 @@ async function classifyWithAI(request, requestId) {
             errorCode: request.errorCode,
             model: config_1.config.openai.model,
         });
-        const completion = await openai.chat.completions.create({
+        const completion = await client.chat.completions.create({
             model: config_1.config.openai.model,
             max_tokens: config_1.config.openai.maxTokens,
             temperature: config_1.config.openai.temperature,

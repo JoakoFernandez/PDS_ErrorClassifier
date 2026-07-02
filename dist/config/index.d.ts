@@ -2,10 +2,10 @@ export declare const config: {
     port: number;
     nodeEnv: "development" | "production" | "test";
     openai: {
-        apiKey: string;
         model: string;
         maxTokens: number;
         temperature: number;
+        apiKey?: string | undefined;
     };
     redis: {
         url: string;

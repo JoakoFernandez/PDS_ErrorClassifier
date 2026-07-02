@@ -11,7 +11,7 @@ const configSchema = zod_1.z.object({
     port: zod_1.z.coerce.number().default(3000),
     nodeEnv: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     openai: zod_1.z.object({
-        apiKey: zod_1.z.string().min(1, 'OPENAI_API_KEY is required'),
+        apiKey: zod_1.z.string().min(1).optional(),
         model: zod_1.z.string().default('gpt-4o-mini'),
         maxTokens: zod_1.z.coerce.number().default(500),
         temperature: zod_1.z.coerce.number().min(0).max(2).default(0.2),
@@ -34,6 +34,14 @@ const configSchema = zod_1.z.object({
         level: zod_1.z.enum(['error', 'warn', 'info', 'debug']).default('info'),
         format: zod_1.z.enum(['json', 'pretty']).default('json'),
     }),
+}).superRefine((data, ctx) => {
+    if (data.classification.aiFallbackEnabled && !data.openai.apiKey) {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'OPENAI_API_KEY is required when AI_FALLBACK_ENABLED is true. Set AI_FALLBACK_ENABLED=false to use static map only.',
+            path: ['openai', 'apiKey'],
+        });
+    }
 });
 const parseResult = configSchema.safeParse({
     port: process.env.PORT,

@@ -82,20 +82,32 @@ A lightweight Node.js microservice that sits between the PDS payment system and 
 
 - Node.js 20+
 - Redis (or Docker)
-- OpenAI API key
+- OpenAI API key *(only for AI-powered mode — see below)*
 
-### Quick Start (Docker)
+### Quick Start — No API Key (Static Map Only)
+
+Start with zero configuration. Known error codes (504, CARD_DECLINED, etc.) work immediately:
 
 ```bash
-# Clone and configure
 cp .env.example .env
-# Set OPENAI_API_KEY in .env
-
-# Start everything
+# Set AI_FALLBACK_ENABLED=false in .env (no API key needed)
 docker compose up
+```
 
-# API will be on http://localhost:3000
-# Redis UI on http://localhost:8081 (with --profile debug flag)
+Open `http://localhost:3000/api/v1/health` to verify it's running. Test with:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/classify \
+  -H "Content-Type: application/json" \
+  -d '{"errorCode": "504"}'
+```
+
+### Quick Start — AI-Powered (with API Key)
+
+```bash
+cp .env.example .env
+# Set OPENAI_API_KEY and keep AI_FALLBACK_ENABLED=true (default)
+docker compose up
 ```
 
 ### Local Development
@@ -103,16 +115,10 @@ docker compose up
 ```bash
 npm install
 cp .env.example .env
-# Edit .env — set OPENAI_API_KEY at minimum
+# Set AI_FALLBACK_ENABLED=false to skip OpenAI, or add OPENAI_API_KEY
 
-# Start Redis (if not using Docker)
-redis-server
-
-# Start the API in watch mode
-npm run dev
-
-# Open the dashboard
-open dashboard/index.html
+redis-server        # start Redis (or use Docker)
+npm run dev         # starts API in watch mode on port 3000
 ```
 
 ---
@@ -204,13 +210,34 @@ Invalidate a cached classification. Useful for hot-patching bad AI results witho
 
 All config is via environment variables (see `.env.example`).
 
+### Two Modes of Operation
+
+| Mode | `AI_FALLBACK_ENABLED` | `OPENAI_API_KEY` | Coverage |
+|---|---|---|---|
+| **Static-only** | `false` | Not needed | 28 known codes + generic fallback |
+| **AI-powered** | `true` (default) | Required | 28 known codes + AI for unknowns + fallback |
+
+Start with **Static-only** (no key needed). All common errors work immediately. Add the API key later when you want AI coverage for novel/rare error codes.
+
+### Free LLM Providers (No Credit Card)
+
+You don't need an OpenAI account. These OpenAI-compatible APIs work as drop-in replacements:
+
+| Provider | Sign Up | API Key | Model | `OPENAI_BASE_URL` |
+|---|---|---|---|---|
+| **Groq** | https://console.groq.com | `gsk_*` (free tier) | `llama3-70b-8192` | `https://api.groq.com/openai/v1` |
+| **Google Gemini** | https://aistudio.google.com | Free API key | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+
+Set all three env vars (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) and it just works.
+
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | — | **Required.** Your OpenAI key |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Model to use; upgrade to `gpt-4o` for higher accuracy |
+| `OPENAI_API_KEY` | — | Required only when `AI_FALLBACK_ENABLED=true` |
+| `OPENAI_BASE_URL` | — | API base URL for OpenAI-compatible providers (Groq, Gemini) |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model name for your chosen provider |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `REDIS_TTL_SECONDS` | `3600` | How long AI results are cached (1 hour) |
-| `AI_FALLBACK_ENABLED` | `true` | Disable to use only the static map (no OpenAI calls) |
+| `AI_FALLBACK_ENABLED` | `true` | `false` → static map only (no key needed); `true` → AI for unknown codes |
 | `AI_CONFIDENCE_THRESHOLD` | `0.6` | Minimum AI confidence to accept; below this → fallback |
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per IP per minute |
 | `LOG_FORMAT` | `json` | `json` for production, `pretty` for development |
@@ -279,6 +306,15 @@ The proposal showed only `errorCode` as input. Adding `rawMessage` (the raw syst
 
 ### ✅ Vue.js Dashboard (Addition — matches proposal stack)
 Vue.js was listed in the proposed stack. The dashboard provides a working test UI for the API with quick-code buttons, classification history, confidence bars, and source tracking.
+
+### ✅ Zero-API-Key Mode (Change)
+The original proposal assumed an API key was always required. This implementation makes `OPENAI_API_KEY` optional: when `AI_FALLBACK_ENABLED=false`, the service runs entirely on the static map (28 error codes) plus the generic fallback. This lets developers test and deploy the service without any third-party API key. When the key is later added and `AI_FALLBACK_ENABLED=true`, AI classification activates automatically for unknown codes — no code changes needed.
+
+### ✅ Lazy OpenAI Client (Change)
+Instead of creating the OpenAI SDK client eagerly at import time (which crashed on missing keys), the client is created lazily on the first AI classification request. If no API key is configured, `classifyWithAI` returns `null` immediately and the pipeline falls through to the generic fallback.
+
+### ✅ Project Restructured to `src/` (Change)
+The original scaffold placed all `.ts` files at the project root. These were moved into proper `src/` subdirectories (config, controllers, middleware, routes, services, types, utils) matching the `tsconfig.json` `rootDir: "./src"` setting. Missing files (`logger.ts`, config, middleware, routes, entry point) were created from templates. See the updated project structure below.
 
 ---
 
