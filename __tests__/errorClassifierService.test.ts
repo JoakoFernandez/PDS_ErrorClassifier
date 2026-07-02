@@ -140,7 +140,7 @@ describe('errorClassifierService', () => {
       expect(result.source).toBe('fallback');
       expect(result.confidence).toBe(0);
       expect(result.shouldEscalateToSupport).toBe(false);
-      expect(result.userTitle).toBe('Payment could not be completed');
+      expect(result.userTitle).toBe('No se pudo completar el pago');
     });
   });
 

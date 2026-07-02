@@ -26,17 +26,17 @@ import type { ClassifiedError, ClassifyRequest } from '../types';
 /** Generic fallback used when classification fails at all layers. */
 const FALLBACK_CLASSIFICATION: Omit<ClassifiedError,
   'originalCode' | 'supportReferenceCode' | 'classifiedAt'> = {
-  userTitle: 'Payment could not be completed',
+  userTitle: 'No se pudo completar el pago',
   userMessage:
-    "We were unable to process your payment right now. No charge has been made. Please try again or contact our support team for assistance.",
+    'No pudimos procesar tu pago en este momento. No se realizó ningún cargo. Intenta de nuevo o contacta a nuestro equipo de soporte para recibir ayuda.',
   suggestedActions: [
     {
-      label: 'Try Again',
-      description: 'Wait a moment and attempt the payment again.',
+      label: 'Intentar de nuevo',
+      description: 'Espera un momento y vuelve a intentar el pago.',
     },
     {
-      label: 'Contact Support',
-      description: 'Our support team is available 24/7 to help.',
+      label: 'Contactar a soporte',
+      description: 'Nuestro equipo de soporte está disponible 24/7 para ayudarte.',
       actionUrl: '/support/chat',
     },
   ],
