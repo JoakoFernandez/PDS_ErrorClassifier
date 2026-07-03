@@ -260,6 +260,7 @@
       <div class="nav-links">
         <a href="index.html" class="nav-link">Dashboard</a>
         <a href="simulator.html" class="nav-link active">Simulator</a>
+        <a href="checkout.html" class="nav-link">Checkout</a>
       </div>
     </header>
 
@@ -327,6 +328,26 @@
         <span v-if="loading" class="spinner"></span>
         <span v-else>&#x25B6; Classify Custom</span>
       </button>
+    </div>
+
+    <div v-if="checkoutResults.length > 0" class="panel slide-in">
+      <div class="section-label">Checkout Results &middot; {{ checkoutResults.length }}</div>
+      <div v-for="(r, i) in checkoutResults" :key="'_chk_' + i"
+           :class="['result-card', 'sev-' + r.result.severity]" style="margin-bottom:10px; animation:none;">
+        <div :class="['result-header', 'sev-' + r.result.severity]">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+              <span style="font-family:var(--mono); font-size:10px; color:var(--text-muted);">checkout</span>
+              <span style="font-family:var(--mono); font-size:11px; font-weight:600;">{{ r.request.errorCode }}</span>
+              <span :class="['badge', 'sev-' + r.result.severity]">{{ r.result.severity }}</span>
+              <span :class="['badge', 'source-' + r.result.source.replace('_', '-')]"
+                    :style="sourceBadgeStyle(r.result.source)">{{ sourceLabel(r.result.source) }}</span>
+            </div>
+            <div class="result-title">{{ r.result.userTitle }}</div>
+            <div class="result-message">{{ r.result.userMessage }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel">
@@ -491,6 +512,16 @@ createApp({
     const showCustom = ref(false);
     const customForm = reactive({ errorCode: '', rawMessage: '', paymentMethod: '', transactionType: '' });
     const apiStatus = ref('checking...');
+    const checkoutResults = ref([]);
+
+    function loadCheckoutHistory() {
+      try {
+        const stored = JSON.parse(localStorage.getItem('pds_checkout_history') || '[]');
+        checkoutResults.value = stored.filter(e => e.type === 'error' && e.result);
+      } catch { checkoutResults.value = []; }
+    }
+    loadCheckoutHistory();
+    window.addEventListener('storage', loadCheckoutHistory);
 
     const scenarios = SCENARIOS;
 
@@ -639,6 +670,7 @@ createApp({
     return {
       loading, apiError, selectedScenario, results, showCustom, customForm,
       scenarios, knownCount, unknownCount, totalScenarios, summary, apiStatus,
+      checkoutResults,
       selectScenario, randomSelect, runSelected, runAll, runCustom,
       clearResults, toggleCustom, sourceLabel, sourceBadgeStyle, formatJSON,
     };

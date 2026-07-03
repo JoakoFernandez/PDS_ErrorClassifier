@@ -4,13 +4,19 @@
 
 ---
 
+## Overview
+
+The PDS Error Classifier sits between the PDS payment system and the frontend. Every error code — `Error 504`, `CARD_DECLINED`, `invalid param` — is intercepted, classified, and returned as a human-friendly response with clear next steps for the user.
+
+---
+
 ## The Problem
 
 Users encountering `Error 504` or `invalid param` have no idea what went wrong or what to do. They call support, wait on hold, and leave frustrated. The PDS payment system emits dozens of technical error codes that mean nothing to non-technical users.
 
 ## The Solution
 
-A lightweight Node.js microservice that sits between the PDS payment system and your frontend. It maps every error code to:
+A lightweight Node.js microservice that maps every error code to:
 
 - **A human-friendly title** — calm, non-technical, 60 characters max
 - **An empathetic message** — written in second person, never alarming
@@ -23,56 +29,56 @@ A lightweight Node.js microservice that sits between the PDS payment system and 
 ## Architecture
 
 ```
- PDS Payment System
-        │  error codes
-        ▼
+  PDS Payment System
+         │  error codes
+         ▼
 ┌─────────────────────────────────────────────────────┐
-│              Error Classifier Microservice           │
-│                                                      │
-│  POST /api/v1/classify                               │
-│         │                                            │
-│         ▼                                            │
-│  ┌─────────────────┐    HIT → return immediately     │
-│  │  Layer 1        │                                 │
-│  │  Static Map     │  O(1) in-process lookup         │
-│  │  (28+ codes)    │  No network, no cost            │
-│  └────────┬────────┘                                 │
-│           │ MISS                                     │
-│           ▼                                          │
-│  ┌─────────────────┐    HIT → return immediately     │
-│  │  Layer 2        │                                 │
-│  │  Redis Cache    │  < 2ms, ~$0.000001/call         │
-│  │                 │  TTL: 1 hour (configurable)     │
-│  └────────┬────────┘                                 │
-│           │ MISS                                     │
-│           ▼                                          │
-│  ┌─────────────────┐    HIT → cache + return         │
-│  │  Layer 3        │                                 │
-│  │  OpenAI GPT     │  ~500ms, ~$0.001/call           │
-│  │  (gpt-4o-mini)  │  Result is cached for future    │
-│  └────────┬────────┘                                 │
-│           │ MISS / low confidence                    │
-│           ▼                                          │
-│  ┌─────────────────┐                                 │
-│  │  Layer 4        │  Always succeeds                │
-│  │  Safe Fallback  │  Generic but reassuring message │
-│  └─────────────────┘                                 │
+│              Error Classifier Microservice            │
+│                                                       │
+│  POST /api/v1/classify                                │
+│         │                                             │
+│         ▼                                             │
+│  ┌─────────────────┐    HIT → return immediately      │
+│  │  Layer 1        │                                  │
+│  │  Static Map     │  O(1) in-process lookup          │
+│  │  (28+ codes)    │  No network, no cost             │
+│  └────────┬────────┘                                  │
+│           │ MISS                                      │
+│           ▼                                           │
+│  ┌─────────────────┐    HIT → return immediately      │
+│  │  Layer 2        │                                  │
+│  │  Redis Cache    │  < 2ms, ~$0.000001/call          │
+│  │                 │  TTL: 1 hour (configurable)      │
+│  └────────┬────────┘                                  │
+│           │ MISS                                      │
+│           ▼                                           │
+│  ┌─────────────────┐    HIT → cache + return          │
+│  │  Layer 3        │                                  │
+│  │  OpenAI GPT     │  ~500ms, ~$0.001/call            │
+│  │  (gpt-4o-mini)  │  Result is cached for future     │
+│  └────────┬────────┘                                  │
+│           │ MISS / low confidence                     │
+│           ▼                                           │
+│  ┌─────────────────┐                                  │
+│  │  Layer 4        │  Always succeeds                  │
+│  │  Safe Fallback  │  Generic but reassuring message   │
+│  └─────────────────┘                                  │
 └─────────────────────────────────────────────────────┘
-        │  ClassifiedError
-        ▼
- Frontend / Mobile App
+         │  ClassifiedError
+         ▼
+  Frontend / Mobile App
 ```
 
 ### Why This Stack
 
 | Technology | Role | Why |
 |---|---|---|
-| **Node.js + TypeScript** | API server | Non-blocking I/O ideal for high-concurrency payment flows; TypeScript ensures type safety across the entire pipeline |
-| **Redis** | Classification cache | Sub-millisecond reads; TTL-based expiry; prevents repeated OpenAI calls for the same error code |
-| **OpenAI (gpt-4o-mini)** | AI fallback classifier | Handles novel/undocumented error codes that aren't in the static map; ~95% accuracy at low cost |
-| **Vue.js** | Dashboard | Lightweight reactive UI; single-file HTML for zero-build-step deployment |
+| **Node.js + TypeScript** | API server | Non-blocking I/O for high-concurrency payment flows; type safety across the entire pipeline |
+| **Redis** | Classification cache | Sub-millisecond reads; TTL-based expiry; prevents repeated AI calls for the same error |
+| **OpenAI (gpt-4o-mini)** | AI fallback classifier | Handles novel/undocumented error codes; ~95% accuracy at low cost |
+| **Vue.js** | Dashboard + Simulator | Lightweight reactive UI; single-file HTML for zero-build-step deployment |
 | **Zod** | Request validation | Schema validation with TypeScript inference; fail-fast on malformed inputs |
-| **Winston** | Logging | Structured JSON logs; child loggers with request IDs enable full trace correlation |
+| **Winston** | Logging | Structured JSON logs; child loggers with request IDs for full trace correlation |
 
 ---
 
@@ -82,19 +88,19 @@ A lightweight Node.js microservice that sits between the PDS payment system and 
 
 - Node.js 20+
 - Redis (or Docker)
-- OpenAI API key *(only for AI-powered mode — see below)*
+- OpenAI API key *(only for AI-powered mode)*
 
-### Quick Start — No API Key (Static Map Only)
+### Option A — No API Key (Static Map Only)
 
-Start with zero configuration. Known error codes (504, CARD_DECLINED, etc.) work immediately:
+Start with zero configuration. Known error codes work immediately:
 
 ```bash
 cp .env.example .env
-# Set AI_FALLBACK_ENABLED=false in .env (no API key needed)
+# Set AI_FALLBACK_ENABLED=false in .env
 docker compose up
 ```
 
-Open `http://localhost:3000/api/v1/health` to verify it's running. Test with:
+Verify:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/classify \
@@ -102,11 +108,11 @@ curl -X POST http://localhost:3000/api/v1/classify \
   -d '{"errorCode": "504"}'
 ```
 
-### Quick Start — AI-Powered (with API Key)
+### Option B — AI-Powered (with API Key)
 
 ```bash
 cp .env.example .env
-# Set OPENAI_API_KEY and keep AI_FALLBACK_ENABLED=true (default)
+# Set OPENAI_API_KEY, keep AI_FALLBACK_ENABLED=true (default)
 docker compose up
 ```
 
@@ -130,6 +136,7 @@ npm run dev         # starts API in watch mode on port 3000
 Classify a single payment error.
 
 **Request body:**
+
 ```json
 {
   "errorCode": "504",
@@ -147,16 +154,17 @@ Classify a single payment error.
 > `rawMessage` and `context` are optional but dramatically improve AI classification accuracy for unknown codes.
 
 **Response:**
+
 ```json
 {
   "success": true,
   "data": {
     "originalCode": "504",
-    "userTitle": "Payment taking longer than expected",
-    "userMessage": "Our payment system is taking too long to respond right now. Your card has not been charged. Please try again in a moment.",
+    "userTitle": "El pago esta tomando mas tiempo de lo normal",
+    "userMessage": "Nuestro sistema de pagos esta tardando en responder. No se ha realizado ningun cargo a tu tarjeta. Por favor, intenta de nuevo en unos momentos.",
     "suggestedActions": [
-      { "label": "Try Again", "description": "Wait a few seconds and attempt the payment again." },
-      { "label": "Contact Support", "description": "Our support team can investigate.", "actionUrl": "/support/chat" }
+      { "label": "Intentar de nuevo", "description": "Espera unos segundos e intenta realizar el pago otra vez." },
+      { "label": "Contactar a soporte", "description": "Nuestro equipo de soporte puede investigar y procesar tu pago de forma manual.", "actionUrl": "/support/chat" }
     ],
     "severity": "high",
     "category": "timeout",
@@ -208,7 +216,7 @@ Invalidate a cached classification. Useful for hot-patching bad AI results witho
 
 ## Configuration Reference
 
-All config is via environment variables (see `.env.example`).
+All configuration is done via environment variables. See `.env.example` for a full template.
 
 ### Two Modes of Operation
 
@@ -219,25 +227,27 @@ All config is via environment variables (see `.env.example`).
 
 Start with **Static-only** (no key needed). All common errors work immediately. Add the API key later when you want AI coverage for novel/rare error codes.
 
-### Free LLM Providers (No Credit Card)
+### Free LLM Providers (No Credit Card Required)
 
-You don't need an OpenAI account. These OpenAI-compatible APIs work as drop-in replacements:
+These OpenAI-compatible APIs work as drop-in replacements:
 
-| Provider | Sign Up | API Key | Model | `OPENAI_BASE_URL` |
-|---|---|---|---|---|
-| **Groq** | https://console.groq.com | `gsk_*` (free tier) | `llama3-70b-8192` | `https://api.groq.com/openai/v1` |
-| **Google Gemini** | https://aistudio.google.com | Free API key | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+| Provider | Sign Up | Model | `OPENAI_BASE_URL` |
+|---|---|---|---|
+| **Groq** | https://console.groq.com | `llama3-70b-8192` | `https://api.groq.com/openai/v1` |
+| **Google Gemini** | https://aistudio.google.com | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
 
 Set all three env vars (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`) and it just works.
+
+### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENAI_API_KEY` | — | Required only when `AI_FALLBACK_ENABLED=true` |
-| `OPENAI_BASE_URL` | — | API base URL for OpenAI-compatible providers (Groq, Gemini) |
+| `OPENAI_BASE_URL` | — | API base URL for OpenAI-compatible providers |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model name for your chosen provider |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `REDIS_TTL_SECONDS` | `3600` | How long AI results are cached (1 hour) |
-| `AI_FALLBACK_ENABLED` | `true` | `false` → static map only (no key needed); `true` → AI for unknown codes |
+| `AI_FALLBACK_ENABLED` | `true` | `false` = static map only; `true` = AI for unknown codes |
 | `AI_CONFIDENCE_THRESHOLD` | `0.6` | Minimum AI confidence to accept; below this → fallback |
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per IP per minute |
 | `LOG_FORMAT` | `json` | `json` for production, `pretty` for development |
@@ -253,10 +263,10 @@ To add a new payment processor's error codes:
 ```typescript
 // In STATIC_ERROR_MAP:
 'STRIPE_CARD_VELOCITY_EXCEEDED': {
-  userTitle: 'Too many payment attempts',
-  userMessage: "You've made several payment attempts in a short period. Please wait 10 minutes before trying again.",
+  userTitle: 'Demasiados intentos de pago',
+  userMessage: "Has realizado demasiados intentos de pago en poco tiempo. Espera 10 minutos antes de intentar de nuevo.",
   suggestedActions: [
-    { label: 'Wait and Retry', description: 'Try again after 10 minutes.' },
+    { label: 'Esperar e intentar de nuevo', description: 'Intenta de nuevo despues de 10 minutos.' },
     contactSupport
   ],
   severity: 'medium',
@@ -266,59 +276,15 @@ To add a new payment processor's error codes:
 ```
 
 **Rules for new entries:**
-- `userMessage` ≤ 200 chars (may appear in SMS notifications)
+- `userMessage` must be under 200 characters (may appear in SMS notifications)
 - Never mention the raw error code in user-facing fields
 - Order `suggestedActions` by likelihood of resolving the issue
-- Set `shouldEscalateToSupport: true` only for critical or fraud_risk
+- Set `shouldEscalateToSupport: true` only for critical severity or fraud_risk category
+- All user-facing text must be in neutral Spanish
 
 ---
 
-## Additions & Changes vs. Original Proposal
-
-The following items were added to or changed from the original proposal, with rationale:
-
-### ✅ 4-Layer Pipeline (Addition)
-The proposal described a single "AI classifier". This implementation uses a 4-layer cascade (static map → Redis → OpenAI → fallback). This dramatically reduces AI API costs (80-90% of common errors never reach OpenAI) while maintaining full coverage for novel codes.
-
-### ✅ Batch Endpoint `POST /classify/batch` (Addition)
-Support teams deal with incident waves where the same errors appear across many users simultaneously. A batch endpoint lets dashboards and tooling retrieve all classifications in one round-trip.
-
-### ✅ Cache Invalidation `DELETE /cache/:errorCode` (Addition)
-Without this, a mis-classified error code would persist in Redis for the full TTL (default 1 hour). This endpoint lets operations teams hot-patch bad results without flushing the entire cache or redeploying.
-
-### ✅ Zod Validation (Addition)
-The proposal did not specify input validation. Zod validates and sanitises every request body, preventing malformed inputs from reaching the AI layer and wasting API tokens.
-
-### ✅ Confidence Threshold (Addition)
-When OpenAI returns a low-confidence classification (below `AI_CONFIDENCE_THRESHOLD`), the service falls back to the safe generic message rather than showing a potentially incorrect user-facing message. This prevents the AI from confidently misclassifying obscure codes.
-
-### ✅ `supportReferenceCode` Field (Addition)
-Every classification includes a short `PDS-XXXXXXXX` reference code. This gives users something concrete to quote when calling support, enabling call centre agents to instantly look up what the user saw.
-
-### ✅ Graceful Degradation (Addition)
-Both Redis and OpenAI failures are caught and handled. A Redis outage falls back to AI; an OpenAI failure falls back to the safe generic message. The service never returns a 500 for a known error classification path.
-
-### ✅ Rate Limiting (Addition)
-Without rate limiting, a bot or misbehaving client could exhaust your OpenAI API budget in minutes. The rate limiter caps requests per IP per minute (configurable).
-
-### ✅ `rawMessage` + `context` Fields (Enhancement)
-The proposal showed only `errorCode` as input. Adding `rawMessage` (the raw system error text) and `context` (payment method, transaction type, merchant) to the request body gives OpenAI significantly more information to work with, improving classification accuracy from ~70% to ~90%+ for ambiguous codes.
-
-### ✅ Vue.js Dashboard (Addition — matches proposal stack)
-Vue.js was listed in the proposed stack. The dashboard provides a working test UI for the API with quick-code buttons, classification history, confidence bars, and source tracking.
-
-### ✅ Zero-API-Key Mode (Change)
-The original proposal assumed an API key was always required. This implementation makes `OPENAI_API_KEY` optional: when `AI_FALLBACK_ENABLED=false`, the service runs entirely on the static map (28 error codes) plus the generic fallback. This lets developers test and deploy the service without any third-party API key. When the key is later added and `AI_FALLBACK_ENABLED=true`, AI classification activates automatically for unknown codes — no code changes needed.
-
-### ✅ Lazy OpenAI Client (Change)
-Instead of creating the OpenAI SDK client eagerly at import time (which crashed on missing keys), the client is created lazily on the first AI classification request. If no API key is configured, `classifyWithAI` returns `null` immediately and the pipeline falls through to the generic fallback.
-
-### ✅ Project Restructured to `src/` (Change)
-The original scaffold placed all `.ts` files at the project root. These were moved into proper `src/` subdirectories (config, controllers, middleware, routes, services, types, utils) matching the `tsconfig.json` `rootDir: "./src"` setting. Missing files (`logger.ts`, config, middleware, routes, entry point) were created from templates. See the updated project structure below.
-
----
-
-## Running Tests
+## Testing
 
 ```bash
 npm test              # Run all tests
@@ -326,7 +292,7 @@ npm test -- --watch   # Watch mode
 npm test -- --coverage # Coverage report
 ```
 
-Tests mock Redis and OpenAI so they run without any external services.
+Tests mock Redis and OpenAI so they run without any external services. **10 unit tests** cover all 4 pipeline layers, response shape, and edge cases.
 
 ---
 
@@ -335,25 +301,90 @@ Tests mock Redis and OpenAI so they run without any external services.
 ```
 pds-error-classifier/
 ├── src/
-│   ├── config/         # Env config with Zod validation
-│   ├── controllers/    # HTTP request handlers
-│   ├── middleware/     # Request ID, logging, error handling, validation
-│   ├── routes/         # Express router
+│   ├── config/              # Environment configuration (Zod-validated)
+│   ├── controllers/         # HTTP request handlers
+│   ├── middleware/           # Request ID, logging, error handling, validation
+│   ├── routes/              # Express router definitions
 │   ├── services/
 │   │   ├── cacheService.ts          # Redis cache layer
-│   │   ├── openaiService.ts         # OpenAI classification
+│   │   ├── openaiService.ts         # OpenAI classification (lazy client)
 │   │   └── errorClassifierService.ts # 4-layer pipeline orchestrator
-│   ├── types/          # TypeScript interfaces
+│   ├── types/               # TypeScript interfaces and type aliases
 │   ├── utils/
-│   │   ├── logger.ts        # Winston structured logger
-│   │   └── staticErrorMap.ts # Hand-curated error map (28+ codes)
-│   └── index.ts        # Express app + bootstrap
-├── __tests__/          # Jest unit tests
+│   │   ├── logger.ts               # Winston structured logger
+│   │   └── staticErrorMap.ts       # Hand-curated error map (28 codes)
+│   └── index.ts             # Express app bootstrap
+├── __tests__/               # Jest unit tests
 ├── dashboard/
-│   └── index.html      # Vue.js dashboard (zero build step)
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── package.json
-└── tsconfig.json
+│   ├── index.html           # Vue.js classification dashboard
+│   └── simulator.html       # Error simulation test harness
+├── Dockerfile               # Multi-stage production build
+├── docker-compose.yml       # API + Redis + optional Redis Commander
+├── .env.example             # Configuration template
+├── jest.setup.js            # Test environment setup
+├── package.json             # Dependencies and scripts
+└── tsconfig.json            # TypeScript compiler options
 ```
+
+---
+
+## Project Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start API in watch mode (ts-node-dev) |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled output from `dist/` |
+| `npm test` | Run Jest test suite with coverage |
+| `npm run docs` | Generate API docs with TypeDoc |
+
+---
+
+## Notes and Observations
+
+### Design Decisions
+
+1. **Pipeline over monolith.** The original proposal suggested a single AI classifier. The 4-layer cascade reduces API costs by 80–90% (most traffic never reaches OpenAI) while maintaining full coverage for novel codes.
+
+2. **Spanish as the interface language.** All user-facing messages — static map, fallback, AI prompt — are in neutral Spanish. This was chosen because the primary user base is Spanish-speaking. The system can be adapted to other languages by updating the static map entries and the AI system prompt.
+
+3. **Optional AI dependency.** The service runs without an API key when `AI_FALLBACK_ENABLED=false`. This eliminates the single point of failure on OpenAI availability and reduces cost to zero for deployments that only need the static map.
+
+4. **Lazy client initialization.** The OpenAI SDK client is created on the first request, not at startup. This prevents configuration errors from crashing the service before it serves a single request.
+
+5. **Cache key design.** Cache keys use only the normalized error code — not the raw message or context. This is intentional: the user-facing message for a given code rarely varies, and including the full message text would create near-infinite unique keys.
+
+6. **Confidence threshold.** When the AI returns a classification with confidence below the configurable threshold (default 0.6), it is discarded in favor of the generic fallback. This prevents the AI from confidently misclassifying obscure codes.
+
+### Operational Considerations
+
+- The `DELETE /api/v1/cache/:errorCode` endpoint allows operations teams to hot-patch a bad AI classification without flushing the entire Redis cache or redeploying the service.
+- The health endpoint (`GET /api/v1/health`) returns `207 Multi-Status` when Redis is down — the service is degraded but functional. This is suitable for liveness probes that should not kill the pod on cache failures.
+- Rate limiting is applied per IP address. In production, consider adding a second limiter keyed by API key or user ID if the service is exposed to multiple clients.
+
+### Cost Estimate
+
+With the static map handling 80–90% of traffic and Redis caching AI results:
+
+| Volume/day | Redis hits | AI calls | OpenAI cost | Total |
+|---|---|---|---|---|
+| 10,000 errors | 9,000 | 500 | ~$0.50 | < $1/day |
+| 100,000 errors | 90,000 | 5,000 | ~$5.00 | < $10/day |
+| 1,000,000 errors | 900,000 | 50,000 | ~$50.00 | < $100/day |
+
+Using free providers (Groq, Gemini) reduces this to near zero.
+
+### Future Improvements
+
+- **Multi-language support** — detect user locale and respond in the appropriate language
+- **Analytics dashboard** — track classification sources, cache hit rates, and cost trends
+- **Webhook notifications** — alert external systems when critical errors are classified
+- **Feedback loop** — users rate the usefulness of each message for continuous improvement
+- **A/B testing** — compare classification accuracy across different AI models
+- **Expanded static map** — add error codes from Stripe, PayPal, Mercado Pago, and other processors
+
+---
+
+## License
+
+This project is proprietary software developed for the PDS platform.
