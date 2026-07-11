@@ -7,14 +7,10 @@ services:
     container_name: pds-error-classifier
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
-      - PORT=3000
       - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AI_FALLBACK_ENABLED=true
-      - LOG_FORMAT=pretty
-      - LOG_LEVEL=debug
     depends_on:
       redis:
         condition: service_healthy

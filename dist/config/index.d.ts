@@ -6,6 +6,7 @@ export declare const config: {
         maxTokens: number;
         temperature: number;
         apiKey?: string | undefined;
+        baseURL?: string | undefined;
     };
     redis: {
         url: string;

@@ -12,6 +12,7 @@ const configSchema = zod_1.z.object({
     nodeEnv: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     openai: zod_1.z.object({
         apiKey: zod_1.z.string().min(1).optional(),
+        baseURL: zod_1.z.string().optional(),
         model: zod_1.z.string().default('gpt-4o-mini'),
         maxTokens: zod_1.z.coerce.number().default(500),
         temperature: zod_1.z.coerce.number().min(0).max(2).default(0.2),
@@ -48,6 +49,7 @@ const parseResult = configSchema.safeParse({
     nodeEnv: process.env.NODE_ENV,
     openai: {
         apiKey: process.env.OPENAI_API_KEY,
+        baseURL: process.env.OPENAI_BASE_URL,
         model: process.env.OPENAI_MODEL,
         maxTokens: process.env.OPENAI_MAX_TOKENS,
         temperature: process.env.OPENAI_TEMPERATURE,
